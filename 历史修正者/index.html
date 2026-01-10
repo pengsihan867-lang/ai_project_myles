@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHRONOCIDE: OBSERVER</title>
+    <style>
+        :root {
+            --bg-color: #0d0d15;
+            --primary-color: #00ff41;
+            /* Neon Green */
+            --secondary-color: #a100ff;
+            /* Neon Purple */
+            --danger-color: #ff0055;
+            --text-color: #e0e0e0;
+            --panel-bg: rgba(20, 20, 30, 0.95);
+        }
+
+        @font-face {
+            font-family: 'Pixel';
+            src: local('Courier New');
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Pixel', monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+        }
+
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.5) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #game-container {
+            width: 1024px;
+            height: 768px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 10;
+            background: #111;
+            border: 2px solid var(--primary-color);
+            box-shadow: 0 0 20px var(--primary-color);
+        }
+
+        /* HEADER */
+        #header {
+            height: 50px;
+            background: var(--primary-color);
+            color: #000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-weight: bold;
+            justify-content: space-between;
+        }
+
+        /* MAIN STAGE */
+        #main-stage {
+            flex-grow: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            background: radial-gradient(circle at center, #222 0%, #000 100%);
+            position: relative;
+        }
+
+        /* AVATARS */
+        .avatar-slot {
+            width: 200px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            transition: opacity 0.3s;
+        }
+
+        .avatar-slot.dim {
+            opacity: 0.5;
+            filter: grayscale(100%);
+        }
+
+        .avatar-slot.active {
+            opacity: 1;
+            filter: none;
+        }
+
+        .avatar-frame {
+            width: 180px;
+            height: 180px;
+            background: #000;
+            border: 3px solid var(--secondary-color);
+            box-shadow: 0 0 10px var(--secondary-color);
+            margin-bottom: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Sprite Sheet mapping: 3 cols x 2 rows assumed */
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            background-image: url('assets/avatars_1.png');
+            background-size: 300% 200%;
+            background-repeat: no-repeat;
+        }
+
+        /* Sprite Positions */
+        .sprite-0 {
+            background-position: 0% 0%;
+        }
+
+        /* Socrates */
+        .sprite-1 {
+            background-position: 50% 0%;
+        }
+
+        /* Mozart */
+        .sprite-2 {
+            background-position: 100% 0%;
+        }
+
+        /* Ada */
+        .sprite-3 {
+            background-position: 0% 100%;
+        }
+
+        /* Princip */
+        .sprite-4 {
+            background-position: 50% 100%;
+        }
+
+        /* Oppenheimer */
+        .sprite-5 {
+            background-position: 100% 100%;
+        }
+
+        /* Freddie */
+
+        .char-label {
+            background: var(--secondary-color);
+            color: #fff;
+            padding: 5px 10px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        /* DIALOG */
+        #dialog-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            height: 180px;
+            background: var(--panel-bg);
+            border: 2px solid var(--primary-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #speaker-name {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 5px var(--primary-color);
+        }
+
+        #dialog-text {
+            font-size: 1.1rem;
+            line-height: 1.5;
+            color: #fff;
+            white-space: pre-wrap;
+        }
+
+        /* CONTEXT OVERLAY */
+        #context-overlay {
+            position: absolute;
+            top: 20px;
+            left: 200px;
+            /* Offset from left avatar */
+            right: 200px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--primary-color);
+            padding: 15px;
+            color: #aaa;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        /* CHOICES */
+        #choice-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 50;
+            backdrop-filter: blur(5px);
+        }
+
+        .choice-btn {
+            width: 600px;
+            padding: 20px;
+            border: 2px solid #fff;
+            background: #111;
+            color: #fff;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .choice-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .choice-btn.a {
+            border-color: var(--danger-color);
+            color: var(--danger-color);
+        }
+
+        .choice-btn.a:hover {
+            background: var(--danger-color);
+            color: #fff;
+        }
+
+        .choice-btn.b {
+            border-color: var(--secondary-color);
+            color: var(--secondary-color);
+        }
+
+        .choice-btn.b:hover {
+            background: var(--secondary-color);
+            color: #fff;
+        }
+
+        /* INTRO */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="scanlines"></div>
+
+    <div id="game-container">
+        <div id="header">
+            <span id="header-loc">UNKNOWN</span>
+            <span id="header-time">---</span>
+        </div>
+
+        <div id="main-stage">
+            <!-- Left Avatar (Usually NPC A) -->
+            <div class="avatar-slot" id="slot-a">
+                <div class="avatar-frame">
+                    <div class="avatar-img sprite-0" id="img-a"></div>
+                </div>
+                <div class="char-label" id="label-a">NPC A</div>
+            </div>
+
+            <div id="context-overlay"></div>
+
+            <!-- Right Avatar (Usually NPC B) -->
+            <div class="avatar-slot" id="slot-b" style="margin-left: auto;">
+                <div class="avatar-frame">
+                    <div class="avatar-img sprite-1" id="img-b"></div>
+                </div>
+                <div class="char-label" id="label-b">NPC B</div>
+            </div>
+
+            <div id="dialog-panel">
+                <div id="speaker-name">SYSTEM</div>
+                <div id="dialog-text">Initializing...</div>
+            </div>
+        </div>
+
+        <div id="choice-overlay">
+            <h2 style="color:white; margin-bottom: 40px;">// CRITICAL DECISION REQUIRE //</h2>
+            <div class="choice-btn a" onclick="Game.makeChoice('A')">
+                <strong id="btn-a-title">ELIMINATE TARGET A</strong><br>
+                <small id="btn-a-desc">...</small>
+            </div>
+            <div class="choice-btn b" onclick="Game.makeChoice('B')">
+                <strong id="btn-b-title">ELIMINATE TARGET B</strong><br>
+                <small id="btn-b-desc">...</small>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen" onclick="Game.start()">
+        <h1 style="color:var(--primary-color);">CHRONOCIDE: OBSERVER</h1>
+        <p style="color:#aaa;">CLICK TO INITIALIZE</p>
+    </div>
+
+    <script>
+        // --- DATA FETCH (In real app, fetch(), here embedded for single file) ---
+        // Note: We use the fetch API to get the external markdown file!
+        // Just kidding, for this task allow simple "fetch" if server exists, 
+        // OR fallback to hardcoded string if fetch fails.
+        // I will implement a parser that reads from 'scenarios.md' via fetch assuming user runs a local server,
+        // BUT fallback to hardcoded example for immediate testing.
+
+        // EMBEDDED SCENARIOS DATA
+        let SCENARIOS_MD = `# Chronocide: The Solar Paradox - Observer Files
+
+## 📂 档案编号 [004]：最后的神谕
+
+**1. 元数据 (Metadata)**
+* **时间/地点**：前 399 年，雅典监狱
+* **主要人物 (NPC A)**：苏格拉底 (Socrates) - [Visual: Old Philosopher]
+* **次要人物 (NPC B)**：克里托 (Crito) - [Visual: Young Student]
+* **前置剧情 (Context)**：
+    【修正者日志：观察模式启动】
+    当前时间坐标定位至公元前399年的雅典。
+    这座曾经辉煌的城邦如今正笼罩在一种诡异的狂热与不安之中。虽然伯罗奔尼撒战争已经结束，但雅典的民主制度变得极其脆弱且敏感。
+    
+    我们的目标是名为苏格拉底的老人。拉普拉斯系统的模拟显示，不仅是他在哲学上的地位，更是他这次死亡的方式，将彻底改变人类理性的走向。
+    
+    此刻，苏格拉底被关押在十一人的监狱中，等待即将到来的处决。他的罪名是“慢神”和“腐蚀青年”。
+    虽然这是一个显然的政治迫害，但苏格拉底本人对此表现出的态度异常平静，甚至有些...期待？
+    
+    他的学生克里托已经买通了看守，船只已经准备好，逃往色萨利的路线也已规划完毕。
+    这是一个决定性的夜晚。
+    如果苏格拉底逃走，他将作为一个流亡者度过余生。虽然生命得以延续，但他所坚持的“绝对理性”和“法治精神”将因为这次越狱而蒙上污点。
+    如果他留下赴死，他将用生命确立一种甚至凌驾于生命之上的逻辑权威。
+    
+    系统检测到巨大的熵值波动。
+    请仔细观察他们今晚的对话。
+
+**2. 剧本正文 (Script)**
+
+* **[场景描述]**：昏暗的牢房内，月光透过高处的铁窗洒在满是尘土的地面上。远处传来爱琴海的海浪声。克里托满头大汗，焦急地来回踱步，而苏格拉底正坐在草席上，揉着刚刚解下镣铐的小腿。
+
+* **[对话开始]**：
+    * [头像框: 克里托 | 表情: 焦急]： "老师！你还能睡得着吗？船已经到了苏尼翁角。最迟明天，那艘执行死刑的圣船就会抵达雅典。"
+    * [头像框: 苏格拉底 | 表情: 平静]： "克里托，我的老朋友，你总是这么容易激动。如果这是神的旨意，那就让它来吧。我刚才做了一个梦，一位白衣女神告诉我，第三天我就能回到这一生真正归属的地方。"
+    * [头像框: 克里托 | 表情: 哭喊]： "别再说这些谜语了！我求求你，想想现实吧！如果你死了，不仅我会失去一位无可替代的朋友，全希腊的人还会指责我——指责我克里托明明有钱可以救出老师，却吝啬钱财！"
+    * [头像框: 苏格拉底 | 表情: 微笑]： "为什么我们要如此在意大多数人的看法呢？克里托。不仅是关于正义与非正义，关于美与丑，关于好与坏，我们难道不应该只听从那位专家的意见吗？也就是真理本身。"
+    * [头像框: 克里托 | 表情: 绝望]： "但是老师！大众拥有剥夺我们生命的力量！看看现在，他们判了你死刑！"
+    * [头像框: 苏格拉底 | 表情: 严肃]： "大众即使聚合起来，也无法让人变得聪明或愚蠢，他们只能随波逐流。让我们回到那个这几天我们一直在讨论的问题：我们是否应该为了逃避哪怕是不公正的死亡，而去做一件不正义的事？"
+    * [头像框: 克里托 | 表情: 犹豫]： "我们...不应该。"
+    * [头像框: 苏格拉底 | 表情: 坚定]： "那么，如果我是经过法律审判而被判刑，哪怕这个判决是错误的，如果我私自越狱，是不是在某种程度上摧毁了法律的权威？如果每个人因为觉得判决不公就推翻法律，城邦还能存在吗？"
+    * [头像框: 克里托 | 表情: 痛苦]： "可是...是他们先背叛了正义！是他们冤枉了你！"
+    * [头像框: 苏格拉底 | 表情: 悲悯]： "我们不能以恶报恶，克里托。这是我一生的信条。如果我现在逃跑，我就确实变成了他们口中那个破坏法律的人。我的肉体可以死，但逻辑必须是完美的。"
+    * [头像框: 克里托 | 表情: 崩溃]： "该死的完美逻辑！我只要你活着！没有了生命，你的逻辑还有什么依附？老师，你是想要成为神吗？"
+
+**3. 抉择时刻 (The Choice)**
+* **【系统提示】**：[作为隐形观察者，你判定谁的存在导致了未来的死局？]
+* **选项 A [消除苏格拉底]**：[让毒酒生效。苏格拉底殉道。结果：理性被神化，成为了西方文明的绝对基石。人类逐渐失去对感性和混沌的包容。跳转 -> 006 (工业革命/理性极端化)]
+* **选项 B [消除克里托]**：[制造干扰让克里托无法完成劝说。苏格拉底在孤独中等待死亡，但由于缺乏克里托的激辩，他的死没有那么具有戏剧性的殉道感，甚至被后人淡忘。他或许会被流放。跳转 -> 005 (莫扎特/感性混乱)]
+
+---
+
+## 📂 档案编号 [005]：燃烧的琴弦
+
+**1. 元数据 (Metadata)**
+* **时间/地点**：1756 年，萨尔茨堡
+* **主要人物 (NPC A)**：莫扎特 (Mozart) - [Visual: Crazy Artist]
+* **次要人物 (NPC B)**：利奥波德 (Leopold) - [Visual: Stern Critic]
+* **前置剧情 (Context)**：
+    【修正者日志：时间跃迁完成】
+    如果说上一条时间线是因为过度崇拜理性而变得冰冷，那么这一条分支则充满了混乱的感性色彩。
+    时间来到18世纪中叶的萨尔茨堡。
+    
+    我们的目标是还在襁褓中的沃尔夫冈·阿玛多伊斯·莫扎特，以及他的父亲，宫廷乐师利奥波德·莫扎特。
+    在这个时间线里，我们需要观察“天才”是如何被塑造，或者是被毁灭的。
+    
+    利奥波德是一位野心勃勃但才华有限的音乐家。当他发现自己的儿子拥有惊人的天赋时，他看到的不仅仅是艺术，更是阶级跃迁的希望，是金钱，是荣耀。
+    他制定了魔鬼般的计划：从莫扎特3岁开始，就要带着他巡演整个欧洲。
+    
+    拉普拉斯预测：这种透支式的童年将在莫扎特心中埋下巨大的阴影。虽然这将催生出《唐璜》和《安魂曲》这样伟大的悲剧作品，但也注定了莫扎特英年早逝的命运。
+    是利奥波德的贪婪成就了莫扎特？还是莫扎特的天赋诅咒了利奥波德？
+
+**2. 剧本正文 (Script)**
+
+* **[场景描述]**：窗外雷雨交加，雨点疯狂地拍打着玻璃。屋内，利奥波德却点着数根蜡烛，将房间照得通亮。他手里拿着一把特制的小尺寸小提琴，正对着摇篮里的幼儿说话，眼神中透着一种近乎疯狂的光芒。
+
+* **[对话开始]**：
+    * [头像框: 利奥波德 | 表情: 贪婪]： "听听这雷声！沃尔夫冈！你听到了吗？这是上帝在为你定音！D小调！这是愤怒的上帝！"
+    * [头像框: 莫扎特 | 表情: 纯真]： "Gaga... 星星... 在... 唱歌..."
+    * [头像框: 利奥波德 | 表情: 严厉]： "不许看星星！看着我！看着琴弦！上帝把天赋倒进了你的脑袋里，不是让你来看星星的！我们要去维也纳，去巴黎，去伦敦！只要你拉琴，那些贵族就会把金币像雨点一样扔下来！"
+    * [头像框: 莫扎特 | 表情: 哭泣]： "手... 痛痛..."
+    * [头像框: 利奥波德 | 表情: 狂热]： "痛？痛就对了！记住这种痛觉！把它放进你的手指里！普通的快乐只会产生垃圾，只有痛苦才能酿造出伟大的艺术！你是我的作品，沃尔夫冈，你是我最完美的作品！"
+    * [头像框: 莫扎特 | 表情: 恐惧]： "怕... 爸爸... 怕..."
+    * [头像框: 利奥波德 | 表情: 冷酷]： "怕我就好。这种恐惧会让你保持清醒。你不需要童年，你需要的是不朽。"
+
+**3. 抉择时刻 (The Choice)**
+* **【系统提示】**：[哪一种痛苦是必要的？]
+* **选项 A [消除莫扎特]**：[引发高热让夭折发生。世间再无《魔笛》，也无《安魂曲》。人类艺术史少了一座丰碑，但多了一个没有痛苦的灵魂。文明进入漫长的平庸期。跳转 -> 009 (平庸的流行乐)]
+* **选项 B [消除利奥波德]**：[让利奥波德突发心脏病离世。莫扎特由溺爱的母亲抚养。他会快乐地长大，可能成为一名普通的宫廷乐师，写写快乐的小夜曲，并没有那种撕裂灵魂的深刻作品。跳转 -> 010 (快乐的凡人)]
+
+---
+
+## 📂 档案编号 [006]：铁锈女王
+
+**1. 元数据 (Metadata)**
+* **时间/地点**：1888 年，伦敦东区
+* **主要人物 (NPC A)**：爱达 (Ada) - [Visual: Steampunk Mechanic]
+* **次要人物 (NPC B)**：布莱克先生 (Mr. Black) - [Visual: Rich Gentleman]
+* **前置剧情 (Context)**：
+    【修正者日志：时间跃迁完成】
+    理性的极致发展带来了什么？欢迎来到19世纪末的伦敦，或者说，“蒸汽赛博”的伦敦。
+    工业革命比原定历史提前了近百年爆发（源于苏格拉底逻辑的绝对化？）。
+    
+    在这个烟雾弥漫的地下室里，天才机械师爱达（拜伦之女的平行同位体）刚刚完成了她的杰作：一台基于差分机原理的“蒸汽网络原型机”。
+    她的初衷是链接每一个工人的思想，创造一个平等的交流网络。
+    
+    然而，站在她对面的，是富可敌国的军火商与工厂主，布莱克先生。
+    布莱克看到的不是交流，是控制。
+    他想买下这个技术，建立“全景敞视监狱”，监控每一个工人的效率和思想。
+    
+    这是自由意志与极权控制的第一次正面交锋。
+
+**2. 剧本正文 (Script)**
+
+* **[场景描述]**：地下实验室充满了刺鼻的机油味和蒸汽。巨大的铜制齿轮在背景中轰鸣旋转。爱达满脸油污，护目镜挂在脖子上，手按在原型机的操作杆上。布莱克先生穿着纤尘不染的黑礼服，用手杖嫌弃地拨开地上的废图纸。
+
+* **[对话开始]**：
+    * [头像框: 资本家 | 表情: 傲慢]： "真是令人叹为观止的噪音，爱达小姐。你称这个为'自由的神经'？我只听到了混乱的尖叫。"
+    * [头像框: 爱达 | 表情: 愤怒]： "那是它在呼吸！只要连上电报线，伦敦东区的每一个纺织工都能和西区的教授对话！知识将不再是特权，这也是我父亲的遗愿！"
+    * [头像框: 资本家 | 表情: 冷笑]： "天真得可爱。让工人对话？让他们讨论怎么罢工吗？不，不。亲爱的，这项技术的真正用途是'管理'。想象一下，不是让他们乱说话，而是我们可以听到他们每一个人的窃窃私语。这才是秩序。"
+    * [头像框: 爱达 | 表情: 坚定]： "你休想！我设计了加密锁，没有我的密钥，这台机器就是废铁！"
+    * [头像框: 资本家 | 表情: 威胁]： "密钥？每个人都有价码，爱达小姐。或者每一种坚持都有它的熔点。没有我的资金，你的实验室明天就会断煤。你的工人朋友们会饿死。把密钥给我，你可以成为这新世界的女皇。"
+    * [头像框: 爱达 | 表情: 嘲讽]： "女皇？你是说囚笼的看守长吗？布莱克，你拥有金钱，但你根本不懂数据流淌的声音。那是比黄金更滚烫的东西！"
+    * [头像框: 资本家 | 表情: 阴沉]： "滚烫？那我就看着你和你的机器一起冷却。最后一次机会，交出密钥，或者被历史的车轮碾碎。"
+    * [头像框: 爱达 | 表情: 决绝]： "那就来碾碎我吧。但我会先炸毁这台原型机，把图纸撒进泰晤士河！"
+
+**3. 抉择时刻 (The Choice)**
+* **【系统提示】**：[控制与混沌的博弈]
+* **选项 A [消除爱达]**：[在她拉下自毁杆前消除她。布莱克获得完整机器。建立了严酷的“蒸汽全景监狱”，人类进入绝对秩序的极权时代。跳转 -> 008 (奥本海默/极权战争)]
+* **选项 B [消除资本家]**：[制造锅炉爆炸让布莱克消失。失去资金支持，爱达虽然发布了技术，但因缺乏维护和规范，网络迅速失控，导致“第一次数据瘟疫/模因污染”。跳转 -> 011 (AI 觉醒)]
+`;
+
+        // CSS Overrides via JS (for text legibility)
+        const styleSheet = document.createElement("style");
+        styleSheet.innerText = `
+            /* Fix Text Legibility: Remove scanlines from dialog panel */
+            #dialog-panel {
+                z-index: 200; /* Above scanlines */
+                background: rgba(20, 20, 30, 0.98); /* Less transparent */
+                box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            }
+            #dialog-text {
+                font-family: 'Courier New', monospace; /* More readable font */
+                font-weight: bold;
+                text-shadow: none; /* Remove blur/glow for better reading */
+            }
+            
+            /* Consequence Overlay */
+            #consequence-overlay {
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: #000;
+                display: none;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 300;
+                padding: 50px;
+                box-sizing: border-box;
+                text-align: center;
+            }
+            .consequence-text {
+                color: var(--primary-color);
+                font-size: 1.5rem;
+                line-height: 1.8;
+                max-width: 800px;
+                margin-bottom: 40px;
+                white-space: pre-wrap;
+            }
+            .next-chapter-btn {
+                padding: 15px 40px;
+                background: var(--bg-color);
+                border: 2px solid var(--primary-color);
+                color: var(--primary-color);
+                cursor: pointer;
+                font-family: 'Pixel', monospace;
+                font-size: 1.2rem;
+            }
+            .next-chapter-btn:hover {
+                background: var(--primary-color);
+                color: #000;
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+        // Add Consequence DOM
+        const consOverlay = document.createElement('div');
+        consOverlay.id = 'consequence-overlay';
+        consOverlay.innerHTML = `
+            <div class="consequence-text" id="consequence-text"></div>
+            <div class="next-chapter-btn" id="next-chapter-btn">ENTERING NEXT ERA >></div>
+        `;
+        document.getElementById('game-container').appendChild(consOverlay);
+
+
+        // ... Audio System ...
+        const Audio = {
+            ctx: null,
+            bgmOsc: [],
+            isUrgent: false,
+
+            init() {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+            },
+
+            ensureStarted() {
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                if (this.bgmOsc.length === 0) {
+                    this.startBGM();
+                }
+            },
+
+            playBlip() {
+                if (!this.ctx) return;
+                this.ensureStarted();
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                o.connect(g);
+                g.connect(this.ctx.destination);
+                o.frequency.value = 800 + Math.random() * 200;
+                g.gain.value = 0.05;
+                o.start();
+                o.stop(this.ctx.currentTime + 0.05);
+            },
+
+            startBGM() {
+                // Simple procedural ambient Drone
+                // 1. Bass Drone
+                this.createDrone(55, 0.05); // A1
+                this.createDrone(110, 0.03); // A2
+            },
+
+            createDrone(freq, vol) {
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                o.type = 'triangle';
+                o.frequency.value = freq;
+                g.gain.value = vol;
+                o.connect(g);
+                g.connect(this.ctx.destination);
+                o.start();
+                this.bgmOsc.push({ node: o, gain: g, baseFreq: freq });
+            },
+
+            setUrgent(urgent) {
+                this.ensureStarted();
+                this.isUrgent = urgent;
+                const now = this.ctx.currentTime;
+                this.bgmOsc.forEach((osc, index) => {
+                    const targetFreq = urgent ? osc.baseFreq * (1.5 + (index * 0.1)) : osc.baseFreq;
+                    osc.node.frequency.exponentialRampToValueAtTime(targetFreq, now + 0.5);
+                });
+            }
+        };
+
+        // --- GAME ENGINE ---
+        const Game = {
+            scenarios: {},
+            currentId: '004',
+            sceneData: null,
+            stepIndex: 0,
+            isTyping: false,
+            waitingForClick: false,
+            tempNextId: null,
+
+            start() {
+                this.parseScenarios();
+                document.getElementById('start-screen').style.display = 'none';
+                Audio.init();
+                Audio.ensureStarted(); // Try to start
+                this.loadScene('004');
+            },
+
+            parseScenarios() {
+                const chunks = SCENARIOS_MD.split(/^## /gm).slice(1);
+                chunks.forEach(chunk => {
+                    const idMatch = chunk.match(/📂 档案编号 \[(.*?)\]/);
+                    if (!idMatch) return;
+                    const id = idMatch[1];
+
+                    // Parse Metadata
+                    const meta = {};
+                    meta.time = (chunk.match(/时间\/地点\*\*：(.*)/) || [])[1];
+                    meta.npcA = (chunk.match(/主要人物 \(NPC A\)\*\*：(.*?)(?: -|$)/) || [])[1];
+                    meta.npcB = (chunk.match(/次要人物 \(NPC B\)\*\*：(.*?)(?: -|$)/) || [])[1];
+                    // Updated Regex for longer context: Match everything between Context and 2. Script
+                    meta.context = (chunk.match(/前置剧情 \(Context\)\*\*：([\s\S]*?)\*\*2\./) || [])[1];
+
+                    // Parse Visuals
+                    meta.visualA = this.mapVisual(meta.npcA);
+                    meta.visualB = this.mapVisual(meta.npcB);
+
+                    // Parse Script
+                    const scriptBlock = chunk.split('**[对话开始]**：')[1].split('**3. 抉择时刻')[0];
+                    const steps = scriptBlock.trim().split('\n').filter(l => l.trim().startsWith('* [')).map(l => {
+                        const m = l.match(/头像框: (.*?) \| 表情: (.*?)\]： "(.*)"/);
+                        return m ? { speaker: m[1], expr: m[2], text: m[3] } : null;
+                    }).filter(x => x);
+
+                    // Parse Choices
+                    const choices = {};
+                    const cA = chunk.match(/选项 A \[(.*?)\]\*\*：\[(.*?)跳转 -> (.*?)\]/);
+                    if (cA) choices.A = { label: cA[1], result: cA[2], next: cA[3] };
+
+                    const cB = chunk.match(/选项 B \[(.*?)\]\*\*：\[(.*?)跳转 -> (.*?)\]/);
+                    if (cB) choices.B = { label: cB[1], result: cB[2], next: cB[3] };
+
+                    this.scenarios[id] = { meta, steps, choices };
+                });
+            },
+
+            mapVisual(name) {
+                if (!name) return 'sprite-5';
+                if (name.includes('苏格拉底')) return 'sprite-0';
+                if (name.includes('莫扎特')) return 'sprite-1';
+                if (name.includes('爱达')) return 'sprite-2';
+                if (name.includes('普林西普') || name.includes('克里托')) return 'sprite-3';
+                if (name.includes('奥本海默') || name.includes('利奥波德') || name.includes('资本家')) return 'sprite-4';
+                if (name.includes('弗莱迪')) return 'sprite-5';
+                return 'sprite-5';
+            },
+
+            loadScene(id) {
+                if (!this.scenarios[id]) {
+                    console.error(`ID [${id}] not found.`);
+                    alert(`END OF DEMO PATH (ID: ${id})`);
+                    return;
+                }
+
+                this.currentId = id;
+                this.sceneData = this.scenarios[id];
+                this.stepIndex = -1;
+                this.waitingForClick = false;
+
+                // UI Setup
+                const meta = this.sceneData.meta;
+                document.getElementById('header-loc').innerText = meta.time;
+                document.getElementById('label-a').innerText = meta.npcA;
+                document.getElementById('label-b').innerText = meta.npcB;
+                document.getElementById('img-a').className = `avatar-img ${meta.visualA}`;
+                document.getElementById('img-b').className = `avatar-img ${meta.visualB}`;
+
+                // Show Context Overlay
+                document.getElementById('consequence-overlay').style.display = 'none'; // Hide consequence if any
+                document.getElementById('context-overlay').style.display = 'block';
+                // Allow scrolling for long context?
+                document.getElementById('context-overlay').style.overflowY = 'auto';
+                document.getElementById('context-overlay').innerText = meta.context.trim();
+                document.getElementById('context-overlay').innerHTML += "<br><br>[CLICK ANYWHERE TO START OBSERVATION]";
+
+                document.getElementById('dialog-panel').style.opacity = '0';
+                document.getElementById('choice-overlay').style.display = 'none';
+
+                // Reset click handler
+                document.getElementById('main-stage').onclick = () => {
+                    if (this.stepIndex === -1) {
+                        // Close context, start dialog
+                        document.getElementById('context-overlay').style.display = 'none';
+                        document.getElementById('dialog-panel').style.opacity = '1';
+                        this.nextStep();
+                    } else if (this.waitingForClick && !this.isTyping) {
+                        this.nextStep();
+                    } else if (this.isTyping) {
+                        // Instant finish typing
+                        this.finishTyping();
+                    }
+                };
+            },
+
+            nextStep() {
+                this.stepIndex++;
+                if (this.stepIndex >= this.sceneData.steps.length) {
+                    this.triggerChoice();
+                    return;
+                }
+
+                const step = this.sceneData.steps[this.stepIndex];
+
+                // Highlight Speaker
+                const isA = step.speaker.includes(this.sceneData.meta.npcA.split(' ')[0]);
+                const isB = step.speaker.includes(this.sceneData.meta.npcB.split(' ')[0]);
+
+                document.getElementById('slot-a').className = isA ? 'avatar-slot active' : 'avatar-slot dim';
+                document.getElementById('slot-b').className = isB ? 'avatar-slot active' : 'avatar-slot dim';
+
+                document.getElementById('speaker-name').innerText = step.speaker;
+                this.typeText(step.text);
+            },
+
+            typeText(text) {
+                const el = document.getElementById('dialog-text');
+                el.innerText = "";
+                this.isTyping = true;
+                this.waitingForClick = false;
+                this.currentFullText = text;
+
+                let i = 0;
+                // Faster typing for longer text
+                this.timer = setInterval(() => {
+                    el.innerText += text.charAt(i);
+                    i++;
+                    if (i % 3 === 0) Audio.playBlip();
+                    if (i >= text.length) {
+                        this.finishTyping();
+                    }
+                }, 15);
+            },
+
+            finishTyping() {
+                clearInterval(this.timer);
+                document.getElementById('dialog-text').innerText = this.currentFullText;
+                this.isTyping = false;
+                this.waitingForClick = true;
+                // Maybe add a visual indicator like a blinking arrow
+            },
+
+            triggerChoice() {
+                Audio.setUrgent(true);
+                const c = this.sceneData.choices;
+                document.getElementById('choice-overlay').style.display = 'flex';
+                document.getElementById('btn-a-title').innerText = `[ELIMINATE] ${c.A.label}`;
+                document.getElementById('btn-a-desc').innerText = c.A.result.substring(0, 50) + "..."; // Short preview
+                document.getElementById('btn-b-title').innerText = `[ELIMINATE] ${c.B.label}`;
+                document.getElementById('btn-b-desc').innerText = c.B.result.substring(0, 50) + "...";
+            },
+
+            makeChoice(option) {
+                Audio.setUrgent(false);
+                document.getElementById('choice-overlay').style.display = 'none';
+
+                const choice = this.sceneData.choices[option];
+                const rawNext = choice.next ? choice.next.trim() : null;
+                const nextId = rawNext ? rawNext.split(' ')[0] : null; // Sanitize
+
+                this.showConsequence(choice.result, nextId);
+            },
+
+            showConsequence(resultText, nextId) {
+                const overlay = document.getElementById('consequence-overlay');
+                const textBox = document.getElementById('consequence-text');
+                const btn = document.getElementById('next-chapter-btn');
+
+                overlay.style.display = 'flex';
+                // Typewriter effect for consequence? Or just fade in. Let's do simple fade in.
+                textBox.innerText = `>>> REPORT CONFIRMED\n\n${resultText}`;
+
+                this.tempNextId = nextId;
+
+                btn.onclick = () => {
+                    if (this.tempNextId && this.scenarios[this.tempNextId]) {
+                        this.loadScene(this.tempNextId);
+                    } else {
+                        textBox.innerText += `\n\n[SIMULATION END. Target ID: ${this.tempNextId}]`;
+                        btn.style.display = 'none';
+                    }
+                };
+            }
+        };
+    </script>
+</body>
+
+</html>
