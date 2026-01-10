@@ -329,11 +329,6 @@
 
     <script>
         // --- DATA FETCH (In real app, fetch(), here embedded for single file) ---
-        // Note: We use the fetch API to get the external markdown file!
-        // Just kidding, for this task allow simple "fetch" if server exists, 
-        // OR fallback to hardcoded string if fetch fails.
-        // I will implement a parser that reads from 'scenarios.md' via fetch assuming user runs a local server,
-        // BUT fallback to hardcoded example for immediate testing.
 
         // EMBEDDED SCENARIOS DATA
         let SCENARIOS_MD = `# Chronocide: The Solar Paradox - Observer Files
@@ -516,6 +511,26 @@
                 background: var(--primary-color);
                 color: #000;
             }
+
+            /* Context Overlay Logic Change: Move to bottom */
+            #context-overlay {
+                 top: auto !important;
+                 bottom: 20px !important;
+                 left: 20px !important;
+                 right: 20px !important;
+                 height: 180px !important;
+                 background: rgba(10, 10, 15, 0.95) !important;
+                 border: 2px solid var(--primary-color) !important;
+                 z-index: 210 !important; /* Above normal dialog */
+                 overflow-y: auto !important;
+            }
+
+            /* Transition for background */
+            #main-stage {
+                transition: background-image 1s ease-in-out;
+                background-size: cover !important;
+                background-position: center !important;
+            }
         `;
         document.head.appendChild(styleSheet);
 
@@ -628,6 +643,7 @@
                     // Parse Visuals
                     meta.visualA = this.mapVisual(meta.npcA);
                     meta.visualB = this.mapVisual(meta.npcB);
+                    meta.bg = this.mapBackground(meta.time);
 
                     // Parse Script
                     const scriptBlock = chunk.split('**[对话开始]**：')[1].split('**3. 抉择时刻')[0];
@@ -659,10 +675,20 @@
                 return 'sprite-5';
             },
 
+            mapBackground(timePlace) {
+                if (!timePlace) return '';
+                if (timePlace.includes('雅典')) return 'assets/bg_greece.png';
+                if (timePlace.includes('萨尔茨堡')) return 'assets/bg_salzburg.png';
+                if (timePlace.includes('伦敦')) return 'assets/bg_london.png';
+                return '';
+            },
+
             loadScene(id) {
                 if (!this.scenarios[id]) {
                     console.error(`ID [${id}] not found.`);
-                    alert(`END OF DEMO PATH (ID: ${id})`);
+                    // alert(`END OF DEMO PATH (ID: ${id})`);
+                    // If not found, treat as end
+                    this.showConsequence("End of existing simulation data.", null);
                     return;
                 }
 
@@ -678,6 +704,14 @@
                 document.getElementById('label-b').innerText = meta.npcB;
                 document.getElementById('img-a').className = `avatar-img ${meta.visualA}`;
                 document.getElementById('img-b').className = `avatar-img ${meta.visualB}`;
+
+                // Set Background
+                if (meta.bg) {
+                    document.getElementById('main-stage').style.backgroundImage = `url('${meta.bg}')`;
+                } else {
+                    document.getElementById('main-stage').style.backgroundImage = 'none';
+                }
+
 
                 // Show Context Overlay
                 document.getElementById('consequence-overlay').style.display = 'none'; // Hide consequence if any
@@ -785,14 +819,21 @@
 
                 this.tempNextId = nextId;
 
-                btn.onclick = () => {
-                    if (this.tempNextId && this.scenarios[this.tempNextId]) {
+                // Check if nextId is valid in scenarios, otherwise it's an end
+                const hasNext = nextId && this.scenarios[nextId];
+
+                if (hasNext) {
+                    btn.innerText = "ENTERING NEXT ERA >>";
+                    btn.onclick = () => {
                         this.loadScene(this.tempNextId);
-                    } else {
-                        textBox.innerText += `\n\n[SIMULATION END. Target ID: ${this.tempNextId}]`;
-                        btn.style.display = 'none';
-                    }
-                };
+                    };
+                } else {
+                    btn.innerText = "RETURN TO SYSTEM (TITLE)";
+                    btn.onclick = () => {
+                        // Return to title
+                        location.reload(); // Simplest way to reset everything including audio context issues
+                    };
+                }
             }
         };
     </script>
