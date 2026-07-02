@@ -1,4 +1,0 @@
-streamlit
-zhipuai
-Pillow
-python-dotenv
