@@ -1,0 +1,59 @@
+# RouteAlpha M1 配置文件
+# 所有路径相对于 "Route Alpha" 目录(运行 ml_seperate.py / test.ipynb 的工作目录)
+
+data:
+  csv_path: data/peek.csv
+  max_samples: 1000          # 提速上限; null 表示用全部
+  shuffle: true              # peek.csv 按 eval_name 排序, 打乱后滚动切分才有代表性
+  seed: 42
+  success_threshold: 0.5     # 部分列是分数(0.25/0.5/0.75), >= 阈值算成功(1)
+
+# 只为这些模型训练成功率预测器(树模型)。
+# 必须与 peek.csv 里的成功列名完全一致。
+# 可用列: WizardLM/WizardLM-13B-V1.2, claude-instant-v1, claude-v1, claude-v2,
+#         gpt-3.5-turbo-1106, gpt-4-1106-preview, meta/code-llama-instruct-34b-chat,
+#         meta/llama-2-70b-chat, mistralai/mistral-7b-chat, mistralai/mixtral-8x7b-chat,
+#         zero-one-ai/Yi-34B-Chat
+models:
+  - gpt-4-1106-preview
+  - gpt-3.5-turbo-1106
+  - claude-v2
+  - claude-instant-v1
+
+embedding:
+  backend: auto              # auto | sentence_transformers | tfidf
+  model_name: BAAI/bge-small-en-v1.5
+  cache_path: data/emb_cache.npz
+  batch_size: 64
+  tfidf_max_features: 512    # 回退 TF-IDF 时的维度
+
+features:
+  use_structural: true       # 拼接可解释手工特征（中文名）
+  use_embedding: true        # 是否保留 bge / TF-IDF 语义特征
+
+split:
+  mode: expanding            # expanding | sliding | single
+  initial_train: 100         # expanding/sliding 初始训练块; single 模式下即训练集大小
+  step: 100                  # 每个测试块大小
+  test_size: 100             # single 模式专用: 测试集大小
+
+predictor:
+  params:
+    n_estimators: 300
+    max_depth: 5
+    learning_rate: 0.1
+    subsample: 0.9
+    colsample_bytree: 0.9
+    eval_metric: logloss
+    n_jobs: 4
+  calibration:
+    method: isotonic          # isotonic | sigmoid | none
+    holdout_frac: 0.3         # fold 内 train 划出校准集比例
+
+milp:
+  budget_per_query: 0.002    # 平均每条 query 预算; 总预算 = N * 此值
+  solver: gurobi             # gurobi (已安装)
+
+output:
+  pred_path: data/predictions.parquet
+  metrics_path: data/metrics.csv
